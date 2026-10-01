@@ -215,10 +215,13 @@
     .panel .hint { color: #4a6670; font-size: 0.88rem; margin: 0 0 1rem; }
     .panel-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 1.25rem;
     }
-    @media (max-width: 780px) {
+    @media (max-width: 980px) {
+      .panel-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
       .panel-grid { grid-template-columns: 1fr; }
     }
     .panel label { font-size: 0.88rem; color: #2a4554; }
@@ -226,10 +229,32 @@
       background: #fff;
       border-color: #b7cdd0;
     }
+    .panel input:disabled {
+      background: #e9efee;
+      color: #7a8a91;
+      cursor: not-allowed;
+    }
     .panel button[type="submit"] {
       width: auto;
       background: var(--indigo-mid);
       border-color: var(--indigo-mid);
+    }
+    .panel button[type="submit"]:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .lock-flag {
+      color: #8a6d1f;
+      font-weight: 600;
+    }
+    .lock-note {
+      font-size: 0.8rem;
+      color: #8a6d1f;
+      background: #fdf6e0;
+      border: 1px solid #ecd9a0;
+      border-radius: 8px;
+      padding: 0.45rem 0.6rem;
+      margin: 0.6rem 0 0;
     }
     .lot-list {
       list-style: none;

@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import DipLot, Vat, Workshop
-from app.services.vat_rules import VatRuleError, validate_vat_status_change
+from app.services.vat_rules import (
+    VatRuleError,
+    assert_can_edit_profile,
+    is_profile_locked,
+    validate_vat_status_change,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -68,6 +73,7 @@ def _vat_payload(vat: Vat) -> dict:
         "volumeL": float(vat.volumeL),
         "status": vat.status,
         "statusLabel": STATUS_LABELS.get(vat.status, vat.status),
+        "profileLocked": is_profile_locked(vat),
         "workshopId": vat.workshop_id,
         "workshopName": vat.workshop.name if vat.workshop else "",
         "lastRedox": float(latest.redoxMv) if latest and latest.redoxMv is not None else None,
@@ -153,6 +159,55 @@ async def bay_vat_status(
         latest = item.latest_lot()
         validate_vat_status_change(item, status, latest)
         item.status = status
+        db.commit()
+        return RedirectResponse(f"/?vat={pk}" + (f"&workshop={ws}" if ws else ""), status_code=303)
+    except VatRuleError as exc:
+        error = exc.message
+        db.rollback()
+    return render(
+        request,
+        "bay.html",
+        _bay_context(request, db, user, ws, pk, error),
+        status_code=400,
+    )
+
+
+@router.post("/bay/vats/{pk}/profile", response_class=HTMLResponse)
+async def bay_vat_profile(
+    pk: int,
+    request: Request,
+    dyeType: str = Form(...),
+    volumeL: str = Form(...),
+    workshop: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = _need_login(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    item = (
+        db.query(Vat)
+        .options(joinedload(Vat.workshop), joinedload(Vat.lots))
+        .filter(Vat.id == pk)
+        .first()
+    )
+    ws = int(workshop) if workshop.strip() else None
+    if not item:
+        return RedirectResponse("/", status_code=303)
+    error = None
+    try:
+        dye = dyeType.strip()
+        if not dye or len(dye) > 80:
+            raise VatRuleError("染种不能为空，且不超过 80 字。")
+        try:
+            volume = Decimal(volumeL.strip())
+        except InvalidOperation:
+            raise VatRuleError("缸容升数不是有效数字。")
+        if not volume.is_finite() or volume <= 0:
+            raise VatRuleError("缸容升数须为大于 0 的有效数字。")
+        # 与页面展示共用同一锁定判定：可染色时染种/缸容升数禁止硬改
+        assert_can_edit_profile(item, dye, volume)
+        item.dyeType = dye
+        item.volumeL = volume
         db.commit()
         return RedirectResponse(f"/?vat={pk}" + (f"&workshop={ws}" if ws else ""), status_code=303)
     except VatRuleError as exc:

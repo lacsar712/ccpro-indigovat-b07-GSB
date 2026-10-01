@@ -78,7 +78,11 @@
         </h2>
         <p class="hint">当前 <strong x-text="selected().statusLabel"></strong>
           · 最近浸染 <span x-text="selected().lastDippedAt || '—'"></span>
-          · 设为可染色须最新批次电位 ≤ -500 mV</p>
+          · 设为可染色须最新批次电位 ≤ -500 mV
+          <template x-if="selected().profileLocked">
+            <span class="lock-flag">· 染种与缸容升数已锁定</span>
+          </template>
+        </p>
 
         <div class="panel-grid">
           <div>
@@ -95,6 +99,24 @@
                 <input type="number" name="redoxMv" step="0.01" placeholder="例如 -520">
               </label>
               <button type="submit">写入本缸</button>
+            </form>
+          </div>
+          <div>
+            <h3 style="font-size:1rem;margin:0 0 0.65rem;color:#1f4d6b">缸档资料</h3>
+            <form method="post" :action="'/bay/vats/' + selected().id + '/profile'">
+              <input type="hidden" name="workshop" :value="filterWs || ''">
+              <label>染种
+                <input type="text" name="dyeType" required maxlength="80"
+                       :value="selected().dyeType" :disabled="selected().profileLocked">
+              </label>
+              <label>缸容升数 (L)
+                <input type="number" name="volumeL" step="0.01" min="0.01" required
+                       :value="selected().volumeL" :disabled="selected().profileLocked">
+              </label>
+              <button type="submit" :disabled="selected().profileLocked">保存缸档</button>
+              <p class="lock-note" x-show="selected().profileLocked" x-cloak>
+                可染色中：染种与缸容升数已锁定，浸染仍可追加；改回闲置后可再修改。
+              </p>
             </form>
           </div>
           <div>
