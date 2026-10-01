@@ -80,6 +80,37 @@
           · 最近浸染 <span x-text="selected().lastDippedAt || '—'"></span>
           · 设为可染色须最新批次电位 ≤ -500 mV</p>
 
+        <div class="config-box">
+          <h3 style="font-size:1rem;margin:0 0 0.65rem;color:#1f4d6b">缸位配置</h3>
+          <form method="post" :action="'/bay/vats/' + selected().id + '/config'">
+            <input type="hidden" name="workshop" :value="filterWs || ''">
+            <div class="config-fields">
+              <label>染种
+                <input
+                  type="text" name="dyeType" required maxlength="80"
+                  :value="selected().dyeType"
+                  :disabled="selected().configLocked"
+                >
+              </label>
+              <label>缸容升数 (L)
+                <input
+                  type="number" name="volumeL" step="0.01" min="0.01" required
+                  :value="selected().volumeL"
+                  :disabled="selected().configLocked"
+                >
+              </label>
+              <button
+                type="submit"
+                :disabled="selected().configLocked"
+                x-text="selected().configLocked ? '锁定中' : '保存配置'"
+              ></button>
+            </div>
+            <p class="lock-note" x-show="selected().configLocked" x-cloak>
+              当前为可染色状态，染种与缸容升数禁止修改；浸染仍可在下方继续追加，回到闲置后即可再改。
+            </p>
+          </form>
+        </div>
+
         <div class="panel-grid">
           <div>
             <h3 style="font-size:1rem;margin:0 0 0.65rem;color:#1f4d6b">登记浸染</h3>

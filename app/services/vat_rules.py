@@ -20,6 +20,23 @@ def assert_can_mark_ready(latest: Optional[DipLot]) -> None:
         )
 
 
+def vat_config_locked(vat: Vat) -> bool:
+    """染种与缸容升数是否只读：缸处于可染色(ready)时锁定，回到闲置后才可改。
+
+    页面展示与保存接口共用本判定，保证两个入口结论一致。
+    浸染记录不受此限制，ready 状态下仍可追加。
+    """
+    return vat.status == Vat.STATUS_READY
+
+
+def assert_can_edit_vat_config(vat: Vat) -> None:
+    if vat_config_locked(vat):
+        raise VatRuleError(
+            "该缸当前为可染色状态，染种与缸容升数禁止修改；"
+            "浸染仍可继续追加，回到闲置后才可修改。"
+        )
+
+
 def validate_vat_status_change(vat: Vat, new_status: str, latest: Optional[DipLot]) -> None:
     if new_status == Vat.STATUS_READY:
         assert_can_mark_ready(latest)

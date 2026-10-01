@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import DipLot, Vat, Workshop
-from app.services.vat_rules import VatRuleError, validate_vat_status_change
+from app.services.vat_rules import (
+    VatRuleError,
+    assert_can_edit_vat_config,
+    validate_vat_status_change,
+    vat_config_locked,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -68,6 +73,7 @@ def _vat_payload(vat: Vat) -> dict:
         "volumeL": float(vat.volumeL),
         "status": vat.status,
         "statusLabel": STATUS_LABELS.get(vat.status, vat.status),
+        "configLocked": vat_config_locked(vat),
         "workshopId": vat.workshop_id,
         "workshopName": vat.workshop.name if vat.workshop else "",
         "lastRedox": float(latest.redoxMv) if latest and latest.redoxMv is not None else None,
@@ -157,6 +163,52 @@ async def bay_vat_status(
         return RedirectResponse(f"/?vat={pk}" + (f"&workshop={ws}" if ws else ""), status_code=303)
     except VatRuleError as exc:
         error = exc.message
+        db.rollback()
+    return render(
+        request,
+        "bay.html",
+        _bay_context(request, db, user, ws, pk, error),
+        status_code=400,
+    )
+
+
+@router.post("/bay/vats/{pk}/config", response_class=HTMLResponse)
+async def bay_update_vat_config(
+    pk: int,
+    request: Request,
+    dyeType: str = Form(...),
+    volumeL: str = Form(...),
+    workshop: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = _need_login(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    item = (
+        db.query(Vat)
+        .options(joinedload(Vat.workshop), joinedload(Vat.lots))
+        .filter(Vat.id == pk)
+        .first()
+    )
+    ws = int(workshop) if workshop.strip() else None
+    if not item:
+        return RedirectResponse("/", status_code=303)
+    error = None
+    try:
+        # 服务端硬拦截：与页面只读展示共用同一判定，绕过前端禁用也会被拒
+        assert_can_edit_vat_config(item)
+        dye_type = dyeType.strip()
+        if not dye_type:
+            raise ValueError("染种不能为空。")
+        volume = Decimal(volumeL)
+        if volume <= 0:
+            raise ValueError("缸容升数必须大于 0。")
+        item.dyeType = dye_type
+        item.volumeL = volume
+        db.commit()
+        return RedirectResponse(f"/?vat={pk}" + (f"&workshop={ws}" if ws else ""), status_code=303)
+    except (VatRuleError, ValueError, InvalidOperation) as exc:
+        error = exc.message if isinstance(exc, VatRuleError) else f"缸位配置无效：{exc}"
         db.rollback()
     return render(
         request,
